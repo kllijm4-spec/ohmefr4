@@ -1,0 +1,372 @@
+-- โค้ด UI "ไม่มีชื่อ" ธีมสีเหลืองเรียบง่าย ลากได้
+-- ระบบ: ESP คนสีเหลือง + ESP คอมสีแดง + สลับคอมใกล้สุด (ไม่ซ้ำเครื่องเดิม) + เส้น Beam สวยเรียบง่าย + รอกด E 14.5 วิ
+
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local PathfindingService = game:GetService("PathfindingService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ป้องกันรันซ้ำ
+if game.CoreGui:FindFirstChild("NoNameYellowUI") then
+    game.CoreGui.NoNameYellowUI:Destroy()
+end
+
+-- สร้าง ScreenGui หลัก
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "NoNameYellowUI"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- สร้าง Main Frame (สีเหลืองเรียบง่าย ลากได้)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(255, 225, 53)
+MainFrame.Position = UDim2.new(0.5, -125, 0.5, -110)
+MainFrame.Size = UDim2.new(0, 250, 0, 240)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- ส่วนหัว Title
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Parent = MainFrame
+Title.BackgroundTransparency = 1
+Title.Position = UDim2.new(0, 0, 0, 10)
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "ไม่มีชื่อ (Game Shop)"
+Title.TextColor3 = Color3.fromRGB(40, 40, 40)
+Title.TextSize = 18
+
+--- ฟังก์ชันสร้างปุ่ม ---
+local function createButton(name, text, posY)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = MainFrame
+    btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Position = UDim2.new(0, 20, 0, posY)
+    btn.Size = UDim2.new(0, 210, 0, 38)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(60, 60, 60)
+    btn.TextSize = 13
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    
+    return btn
+end
+
+local ESPButton = createButton("ESPButton", "ESP คน: ปิด", 45)
+local FarmMoneyButton = createButton("FarmMoneyButton", "เดินเก็บเงินคอม: ปิด", 90)
+local ToggleUIBtn = createButton("ToggleUIBtn", "ซ่อน/แสดง เมนู", 135)
+
+--- 1. ระบบ ESP คน (สีเหลืองสว่าง) ---
+local playerEspEnabled = false
+local playerEspHighlights = {}
+
+local function togglePlayerESP()
+    playerEspEnabled = not playerEspEnabled
+    if playerEspEnabled then
+        ESPButton.Text = "ESP คน: เปิด"
+        ESPButton.TextColor3 = Color3.fromRGB(200, 150, 0)
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "YellowPlayerESP"
+                highlight.FillColor = Color3.fromRGB(255, 255, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 200, 0)
+                highlight.FillTransparency = 0.3
+                highlight.Parent = player.Character
+                playerEspHighlights[player] = highlight
+            end
+        end
+    else
+        ESPButton.Text = "ESP คน: ปิด"
+        ESPButton.TextColor3 = Color3.fromRGB(60, 60, 60)
+        for _, highlight in pairs(playerEspHighlights) do
+            if highlight then highlight:Destroy() end
+        end
+        playerEspHighlights = {}
+    end
+end
+
+ESPButton.MouseButton1Click:Connect(togglePlayerESP)
+
+--- ฟังก์ชันแจ้งเตือนได้รับเงิน (+300) ---
+local function sendMoneyNotification()
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "🏆 สำเร็จ!";
+            Text = "ได้รับรางวัล: +300 เงิน";
+            Duration = 3;
+        })
+    end)
+end
+
+--- ระบบสร้างเส้นนำทางสีเหลืองแบบ Beam สวยเรียบง่าย ---
+local beamPartStart = Instance.new("Part")
+beamPartStart.Size = Vector3.new(0.1, 0.1, 0.1)
+beamPartStart.Transparency = 1
+beamPartStart.CanCollide = false
+beamPartStart.Anchored = true
+beamPartStart.Parent = workspace
+
+local beamPartEnd = Instance.new("Part")
+beamPartEnd.Size = Vector3.new(0.1, 0.1, 0.1)
+beamPartEnd.Transparency = 1
+beamPartEnd.CanCollide = false
+beamPartEnd.Anchored = true
+beamPartEnd.Parent = workspace
+
+local attach0 = Instance.new("Attachment", beamPartStart)
+local attach1 = Instance.new("Attachment", beamPartEnd)
+
+local yellowBeam = Instance.new("Beam")
+yellowBeam.Attachment0 = attach0
+yellowBeam.Attachment1 = attach1
+yellowBeam.Color = ColorSequence.new(Color3.fromRGB(255, 230, 0))
+yellowBeam.Width0 = 0.3
+yellowBeam.Width1 = 0.3
+yellowBeam.Transparency = NumberSequence.new(0.2)
+yellowBeam.TextureSpeed = 1
+yellowBeam.Enabled = false
+yellowBeam.Parent = workspace
+
+--- ระบบลูกศรชี้บนหัว (Arrow Billboard) ---
+local arrowGui = Instance.new("BillboardGui")
+arrowGui.Size = UDim2.new(0, 50, 0, 50)
+arrowGui.StudsOffset = Vector3.new(0, 3.5, 0)
+arrowGui.AlwaysOnTop = true
+arrowGui.Enabled = false
+
+local arrowLabel = Instance.new("TextLabel")
+arrowLabel.Size = UDim2.new(1, 0, 1, 0)
+arrowLabel.BackgroundTransparency = 1
+arrowLabel.Text = "⬇️"
+arrowLabel.TextSize = 35
+arrowLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+arrowLabel.Parent = arrowGui
+
+--- ตัวแปรเก็บประวัติคอมที่เพิ่งทำไป (ป้องกันทำซ้ำเครื่องเดิมทันที) ---
+local lastProcessedPC = nil
+
+--- ฟังก์ชันค้นหาคอมพิวเตอร์ที่ใกล้ที่สุด (ไม่เอาเครื่องเดิมที่เพิ่งทำ) ---
+local function getClosestPC(character)
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    local closestObj = nil
+    local shortestDistance = math.huge
+    
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "Moneypc" or obj.Name:match("Money") or obj.Name:match("PC") then
+            local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if prompt and obj ~= lastProcessedPC then
+                local pos = nil
+                if obj:IsA("BasePart") then
+                    pos = obj.Position
+                elseif obj:IsA("Model") and obj.PrimaryPart then
+                    pos = obj.PrimaryPart.Position
+                end
+                
+                if pos then
+                    local dist = (rootPart.Position - pos).Magnitude
+                    if dist < shortestDistance then
+                        shortestDistance = dist
+                        closestObj = obj
+                    end
+                end
+            end
+        end
+    end
+    
+    -- ถ้าหาเครื่องอื่นไม่เจอจริงๆ ค่อยยอมกลับมาทำเครื่องเดิม
+    if not closestObj then
+        lastProcessedPC = nil
+        return getClosestPC(character)
+    end
+    
+    return closestObj
+end
+
+--- 2. ระบบเดินเก็บเงินคอม + สปีด 25 + สลับคอมเครื่องใหม่ + Beam เรียบง่าย + รอกด E 14.5 วิ ---
+local farmMoneyEnabled = false
+local pcEspHighlights = {}
+
+local function removePcESP()
+    for _, highlight in pairs(pcEspHighlights) do
+        if highlight then highlight:Destroy() end
+    end
+    pcEspHighlights = {}
+    yellowBeam.Enabled = false
+    arrowGui.Enabled = false
+    lastProcessedPC = nil
+    
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = 16
+    end
+end
+
+local function toggleFarmMoney()
+    farmMoneyEnabled = not farmMoneyEnabled
+    if farmMoneyEnabled then
+        FarmMoneyButton.Text = "เดินเก็บเงินคอม: เปิด"
+        FarmMoneyButton.TextColor3 = Color3.fromRGB(200, 150, 0)
+        
+        task.spawn(function()
+            while farmMoneyEnabled do
+                pcall(function()
+                    local character = LocalPlayer.Character
+                    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                    
+                    if humanoid then
+                        humanoid.WalkSpeed = 25
+                    end
+                    
+                    if character and rootPart then
+                        arrowGui.Parent = rootPart
+                        arrowGui.Enabled = true
+                    end
+                    
+                    -- สร้าง ESP สีแดงให้คอมทุกเครื่อง
+                    for _, obj in ipairs(workspace:GetDescendants()) do
+                        if obj.Name == "Moneypc" or obj.Name:match("Money") or obj.Name:match("PC") then
+                            if not pcEspHighlights[obj] then
+                                local redHighlight = Instance.new("Highlight")
+                                redHighlight.Name = "RedPcESP"
+                                redHighlight.FillColor = Color3.fromRGB(255, 0, 0)
+                                redHighlight.OutlineColor = Color3.fromRGB(255, 80, 80)
+                                redHighlight.FillTransparency = 0.2
+                                redHighlight.Parent = obj
+                                pcEspHighlights[obj] = redHighlight
+                            end
+                        end
+                    end
+                    
+                    -- ค้นหาคอมเครื่องใกล้สุดที่ไม่ใช่เครื่องล่าสุด
+                    local targetObj = getClosestPC(character)
+                    
+                    if targetObj and farmMoneyEnabled then
+                        local prompt = targetObj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        
+                        if prompt and humanoid and rootPart then
+                            local targetPos = nil
+                            if targetObj:IsA("BasePart") then
+                                targetPos = targetObj.Position
+                            elseif targetObj:IsA("Model") and targetObj.PrimaryPart then
+                                targetPos = targetObj.PrimaryPart.Position
+                            end
+                            
+                            if targetPos then
+                                -- เปิดใช้งานเส้น Beam นำทางที่เรียบเนียนขึ้น
+                                yellowBeam.Enabled = true
+                                beamPartStart.Position = rootPart.Position - Vector3.new(0, 1.5, 0)
+                                beamPartEnd.Position = targetPos
+                                
+                                local path = PathfindingService:CreatePath({
+                                    AgentRadius = 3.0,
+                                    AgentHeight = 5,
+                                    AgentCanJump = true,
+                                    WaypointSpacing = 4
+                                })
+                                
+                                path:ComputeAsync(rootPart.Position, targetPos)
+                                
+                                if path.Status == Enum.PathStatus.Success then
+                                    local waypoints = path:GetWaypoints()
+                                    local lastPos = rootPart.Position
+                                    
+                                    for _, waypoint in ipairs(waypoints) do
+                                        if not farmMoneyEnabled then break end
+                                        
+                                        beamPartStart.Position = rootPart.Position - Vector3.new(0, 1.5, 0)
+                                        humanoid:MoveTo(waypoint.Position)
+                                        
+                                        if waypoint.Action == Enum.PathWaypointAction.Jump then
+                                            humanoid.Jump = true
+                                        end
+                                        
+                                        local reached = false
+                                        local conn = humanoid.MoveToFinished:Connect(function()
+                                            reached = true
+                                        end)
+                                        
+                                        local t = 0
+                                        while not reached and t < 0.8 and farmMoneyEnabled do
+                                            task.wait(0.05)
+                                            t = t + 0.05
+                                            beamPartStart.Position = rootPart.Position - Vector3.new(0, 1.5, 0)
+                                        end
+                                        if conn then conn:Disconnect() end
+                                        
+                                        if (rootPart.Position - lastPos).Magnitude < 0.5 and t >= 0.8 then
+                                            humanoid:MoveTo(rootPart.Position - (rootPart.CFrame.LookVector * 5))
+                                            task.wait(0.3)
+                                            break
+                                        end
+                                        lastPos = rootPart.Position
+                                    end
+                                else
+                                    humanoid:MoveTo(targetPos)
+                                    task.wait(0.5)
+                                end
+                                
+                                -- เมื่อเดินมาถึงหน้าคอมพิวเตอร์
+                                if farmMoneyEnabled and (rootPart.Position - targetPos).Magnitude < 8 then
+                                    -- กด E รับเงิน
+                                    fireproximityprompt(prompt)
+                                    
+                                    -- บันทึกเครื่องนี้ไว้ว่าเพิ่งทำเสร็จ จะได้ไม่เดินวนกลับมาซ้ำทันที
+                                    lastProcessedPC = targetObj
+                                    
+                                    -- ยืนนิ่งรอเวลารับเงิน 14.5 วินาที
+                                    humanoid:MoveTo(rootPart.Position)
+                                    task.wait(14.5)
+                                    
+                                    -- แจ้งเตือนรับเงินสำเร็จ
+                                    sendMoneyNotification()
+                                    task.wait(1)
+                                end
+                            end
+                        end
+                    end
+                end)
+                task.wait(0.5)
+            end
+        end)
+    else
+        FarmMoneyButton.Text = "เดินเก็บเงินคอม: ปิด"
+        FarmMoneyButton.TextColor3 = Color3.fromRGB(60, 60, 60)
+        removePcESP()
+    end
+end
+
+FarmMoneyButton.MouseButton1Click:Connect(toggleFarmMoney)
+
+--- ระบบซ่อน/แสดง UI ---
+local uiVisible = true
+ToggleUIBtn.MouseButton1Click:Connect(function()
+    uiVisible = not uiVisible
+    for _, child in ipairs(MainFrame:GetChildren()) do
+        if child ~= Title and child ~= ToggleUIBtn and child ~= UICorner and child.ClassName:match("Button") then
+            child.Visible = uiVisible
+        end
+    end
+    MainFrame.Size = uiVisible and UDim2.new(0, 250, 0, 240) or UDim2.new(0, 250, 0, 55)
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        ScreenGui.Enabled = not ScreenGui.Enabled
+    end
+end)
